@@ -22,14 +22,24 @@ type CanvasElementsProps = {
   objectId: string;
 };
 
+type CanvasLineProps = {
+  type: string;
+  points: { x: number; y: number }[];
+  stroke: string;
+  strokeWidth: number;
+  seed: number;
+  objectId: string;
+};
+
 export default function Canvas() {
   const [elementsOnCanvas, setElementsOnCanvas] = useState<
-    CanvasElementsProps[]
+    (CanvasElementsProps | CanvasLineProps)[]
   >([]);
-  const [previewElement, setpreviewElement] =
-    useState<CanvasElementsProps | null>(null);
+  const [previewElement, setpreviewElement] = useState<
+    CanvasElementsProps | CanvasLineProps | null
+  >(null);
   const [isDrawing, setIsDrawing] = useState(true);
-  const [selectedTool, setSelectedTool] = useState("ellipse");
+  const [selectedTool, setSelectedTool] = useState("line");
   const [selectedShapeId, setselectedShapeId] = useState<string | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
@@ -69,46 +79,119 @@ export default function Canvas() {
     checkDeselect(event);
     // setIsDrawing(true);
     const { x, y } = event.target.getStage().getPointerPosition();
-    setpreviewElement({
-      type: selectedTool,
-      x,
-      y,
-      width: 0,
-      height: 0,
-      rotation: 0,
-      fill: "red",
-      stroke: "black",
-      strokeWidth: 1,
-      fillWeight: 3,
-      hachureGap: 8,
-      hachureAngle: 60,
-      seed: rough.newSeed(),
-      objectId: uuidv4(),
-    });
+    if (selectedTool === "line") {
+      setpreviewElement({
+        type: selectedTool,
+        points: [{ x, y }],
+        stroke: "black",
+        strokeWidth: 2,
+        seed: rough.newSeed(),
+        objectId: uuidv4(),
+      });
+    } else {
+      setpreviewElement({
+        type: selectedTool,
+        x,
+        y,
+        width: 0,
+        height: 0,
+        rotation: 0,
+        fill: "red",
+        stroke: "black",
+        strokeWidth: 1,
+        fillWeight: 3,
+        hachureGap: 8,
+        hachureAngle: 60,
+        seed: rough.newSeed(),
+        objectId: uuidv4(),
+      });
+    }
   };
+
+  useEffect(() => {
+    console.log(elementsOnCanvas);
+  }, [elementsOnCanvas]);
 
   const handleMouseUp = (_event: any) => {
     setIsDrawing(false);
+    if (!previewElement) {
+      return;
+    }
+
     if (
-      !previewElement ||
-      (previewElement.width === 0 && previewElement.height === 0)
+      previewElement.type !== "line" &&
+      previewElement.width === 0 &&
+      previewElement.height === 0
     ) {
       return;
     }
-    setElementsOnCanvas((prevElements) => {
-      const newElements = [...prevElements, previewElement];
-      return newElements;
-    });
+
+    if (previewElement.type === "line" && previewElement.points.length < 2) {
+      // Exit if it's a line but doesn't have enough points
+      return;
+    }
+
+    let elementToAdd = previewElement;
+
+    if (previewElement.type === "line" && previewElement.points.length === 2) {
+      // Modify previewElement to include a midpoint
+      setpreviewElement((prevPreviewElement) => {
+        if (!prevPreviewElement || prevPreviewElement.type !== "line") {
+          return prevPreviewElement; // Just a safety check
+        }
+
+        const midpoint = {
+          x:
+            (prevPreviewElement.points[0].x + prevPreviewElement.points[1].x) /
+            2,
+          y:
+            (prevPreviewElement.points[0].y + prevPreviewElement.points[1].y) /
+            2,
+        };
+
+        const updatedPoints = [
+          prevPreviewElement.points[0],
+          midpoint,
+          prevPreviewElement.points[1],
+        ];
+
+        const updatedPreviewElement = {
+          ...prevPreviewElement,
+          points: updatedPoints,
+        };
+
+        // Update elementToAdd for adding to elementsOnCanvas
+        elementToAdd = updatedPreviewElement;
+
+        // Return the updated state but don't add it here yet
+        return updatedPreviewElement;
+      });
+    }
+
+    // Now, add the elementToAdd to elementsOnCanvas
+    // This setTimeout ensures that the state update above is processed before this update.
+    setTimeout(() => {
+      setElementsOnCanvas((prevElements) => [...prevElements, elementToAdd]);
+      setselectedShapeId(elementToAdd.objectId);
+    }, 0);
+
+    // Reset previewElement
     setpreviewElement(null);
-    setselectedShapeId(previewElement.objectId);
   };
 
   const handleMouseMove = (event: any) => {
     if (!isDrawing) {
       return;
+    } else if (!previewElement) {
+      return;
     }
     const { x, y } = event.target.getStage().getPointerPosition();
-    if (previewElement) {
+    if (previewElement?.type === "line") {
+      setpreviewElement({
+        ...previewElement,
+        points: [previewElement.points[0], { x, y }],
+      });
+    } else {
       setpreviewElement({
         ...previewElement,
         width: x - previewElement.x,
@@ -131,17 +214,6 @@ export default function Canvas() {
       >
         <Layer>
           {elementsOnCanvas.map((element, _index) => {
-            // console.log(
-            //   <CanvasElement
-            //     key={element.objectId}
-            //     {...element}
-            //     setselectedShapeId={setselectedShapeId}
-            //     selectedShapeId={selectedShapeId}
-            //     elementsOnCanvas={elementsOnCanvas}
-            //     setElementsOnCanvas={setElementsOnCanvas}
-            //     transformerRef={transformerRef}
-            //   />
-            // );
             return (
               <CanvasElement
                 key={element.objectId}
@@ -178,6 +250,8 @@ export default function Canvas() {
             anchorSize={7}
             keepRatio={false}
             rotateAnchorCursor={"grab"}
+            rotationSnaps={[0, 90, 180, 270]}
+            rotationSnapTolerance={3}
             anchorStyleFunc={(anchor: any) => {
               if (anchor.getName().toString() === "rotater _anchor") {
                 anchor.cornerRadius(10);

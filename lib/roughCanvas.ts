@@ -28,7 +28,7 @@ class RoughCanvas {
     const { context, shape, config } = options;
     context.fillStyle = "transparent";
     context.fillStrokeShape(shape);
-    
+
     const width = config.width;
     const height = config.height;
     this.roughCanvas = rough.canvas(context.canvas);
@@ -83,6 +83,37 @@ class RoughCanvas {
       }
     );
     this.roughCanvas.draw(diamond);
+  }
+
+  _line(options: any) {
+    const { context, shape, config } = options;
+    // Ensure the roughCanvas and generator are initialized
+    if (!this.roughCanvas || !this.generator) {
+      this.roughCanvas = rough.canvas(context.canvas);
+      this.generator = this.roughCanvas.generator;
+    }
+    // Assuming config.points is an array of [x, y] pairs
+    if (config.points.length > 1) {
+      let pathString = `M ${config.points[0][0]} ${config.points[0][1]}`;
+      for (let i = 1; i < config.points.length; i++) {
+        pathString += ` L ${config.points[i][0]} ${config.points[i][1]}`;
+      }
+
+      // Use the path method of roughjs to draw the path
+      const path = this.generator.path(pathString, {
+        stroke: config.stroke,
+        strokeWidth: config.strokeWidth,
+        roughness: config.roughness,
+        seed: config.seed,
+      });
+
+      // Draw the path on the canvas
+      this.roughCanvas.draw(path);
+    } else {
+      
+    }
+    // Draw the line on the canvas
+    // this.roughCanvas.draw(line);
   }
 }
 

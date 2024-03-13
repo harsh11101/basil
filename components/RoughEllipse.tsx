@@ -31,15 +31,66 @@ const RoughEllipse = (props: RoughEllipseProps) => {
       props.transformerRef.current?.getLayer()?.batchDraw();
     }
   }, [props.isSelected, props.transformerRef]);
+  const isFillTransparent = (fill: string) => {
+    return !fill || fill === "transparent";
+  };
   return (
     <Shape
       onClick={(e) => {
-        console.log(e);
         props.onSelect();
       }}
       onTap={props.onSelect}
       ref={shapeRef}
       name={"roughellipse"}
+      hitFunc={(context, shape) => {
+        const centerX = props.width / 2;
+        const centerY = props.height / 2;
+        const radiusX = Math.abs(props.width) / 2;
+        const radiusY = Math.abs(props.height) / 2;
+        const strokeAdjustment = props.strokeWidth / 2;
+
+        if (isFillTransparent(props.fill)) {
+          // For stroke-only, approximate the boundary. This will not be perfect but provides a basic approximation.
+          context.beginPath();
+          // Outer ellipse
+          context.ellipse(
+            centerX,
+            centerY,
+            radiusX,
+            radiusY,
+            0,
+            0,
+            Math.PI * 2
+          );
+          // Inner ellipse approximation (reduces the hit area slightly inside the actual stroke)
+          context.ellipse(
+            centerX,
+            centerY,
+            radiusX - strokeAdjustment,
+            radiusY - strokeAdjustment,
+            0,
+            0,
+            Math.PI * 2,
+            true
+          );
+          context.closePath();
+        } else {
+          // For filled ellipses, use a standard ellipse hit region
+          context.beginPath();
+          context.ellipse(
+            centerX,
+            centerY,
+            radiusX,
+            radiusY,
+            0,
+            0,
+            Math.PI * 2
+          );
+          context.closePath();
+        }
+
+        context.fillStrokeShape(shape);
+      }}
       x={props.x}
       y={props.y}
       width={props.width}
@@ -48,7 +99,7 @@ const RoughEllipse = (props: RoughEllipseProps) => {
       strokeWidth={0}
       fill={"transparent"}
       objectId={props.objectId}
-      draggable={true}
+      draggable={props.isSelected}
       sceneFunc={(context, shape) => {
         roughCanvas._ellipse({
           context,
